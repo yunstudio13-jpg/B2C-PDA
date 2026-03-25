@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 
 type CollectionOrderType = "电商仓单行" | "电商仓多行" | "总仓单行" | "总仓多行" | "混合";
 
-type ViewType = 'dashboard' | 'taskList' | 'taskDetail' | 'inboundSearch' | 'inboundDetail' | 'boxDetail' | 'putaway' | 'locationAdjustment' | 'inventoryQuery' | 'settings' | 'stocktake';
+type ViewType = 'dashboard' | 'taskList' | 'taskDetail' | 'inboundSearch' | 'inboundDetail' | 'boxDetail' | 'putaway' | 'locationAdjustment' | 'inventoryQuery' | 'settings' | 'stocktake' | 'traceReview' | 'traceReviewDetail';
 
 interface InboundOrder {
   sapNo: string;
@@ -139,6 +139,9 @@ const IconMapPin = ({ size = 20, color = "currentColor" }) => (
 const IconWarehouse = ({ size = 20, color = "currentColor" }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 21h18"></path><path d="M3 7v14"></path><path d="M21 7v14"></path><path d="M9 21V11h6v10"></path><path d="M2 7l10-5 10 5"></path></svg>
 );
+const IconGrid = ({ size = 20, color = "currentColor" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+);
 const IconBarcode = ({ size = 20, color = "currentColor" }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 5v14"></path><path d="M8 5v14"></path><path d="M12 5v14"></path><path d="M17 5v14"></path><path d="M21 5v14"></path></svg>
 );
@@ -250,7 +253,7 @@ const Dashboard = ({ tasks, onNavigate }: { tasks: PickingTask[], onNavigate: (v
     { id: 'pick', label: '拣货任务', icon: '📦', color: '#eff6ff', textColor: '#1d4ed8' },
     { id: 'inbound', label: '收货箱入库', icon: '📥', color: '#f0fdf4', textColor: '#15803d' },
     { id: 'query', label: '库存查询', icon: '🔍', color: '#f1f5f9', textColor: '#334155' },
-    { id: 'adjust', label: '货位调整', icon: '⇆', color: '#fdf4ff', textColor: '#a21caf' },
+    { id: 'adjust', label: '货位调整', icon: '🔄', color: '#fdf4ff', textColor: '#a21caf' },
     { id: 'putaway', label: '待上架', icon: '🪜', color: '#fff7ed', textColor: '#c2410c' },
     { id: 'trace', label: '溯源码二次复核', icon: '🛡️', color: '#f1f5f9', textColor: '#334155' },
     { id: 'stocktake', label: '盘点', icon: '📋', color: '#f1f5f9', textColor: '#334155' },
@@ -305,6 +308,7 @@ const Dashboard = ({ tasks, onNavigate }: { tasks: PickingTask[], onNavigate: (v
               if (item.id === 'putaway') onNavigate('putaway');
               if (item.id === 'query') onNavigate('inventoryQuery');
               if (item.id === 'settings') onNavigate('settings');
+              if (item.id === 'trace') onNavigate('traceReview');
               if (item.id === 'stocktake') alert('盘点模块开发中...');
             }}
             style={{ 
@@ -1215,11 +1219,17 @@ const BoxDetail = ({ boxes, onPutaway, onCrossDock, onBack }: { boxes: InboundBo
 };
 
 // 8. Putaway Component
-const Putaway = ({ boxes, onConfirm, onBack }: { boxes: InboundBox[], onConfirm: () => void, onBack: () => void }) => {
+const Putaway = ({ boxes, onConfirm, onBack, simplified = false }: { boxes: InboundBox[], onConfirm: () => void, onBack: () => void, simplified?: boolean }) => {
   const [location, setLocation] = useState("th9999");
   const [activeTab, setActiveTab] = useState<'in' | 'out'>('in');
   const [showProductionInfo, setShowProductionInfo] = useState(false);
   const [expandedSku, setExpandedSku] = useState<string | null>(null);
+  const [selectedDiscrepancyBox, setSelectedDiscrepancyBox] = useState<InboundBox | null>(null);
+  const [showDiscrepancyForm, setShowDiscrepancyForm] = useState(false);
+  const [discrepancyReason, setDiscrepancyReason] = useState<string>("商品破损");
+  const [discrepancyLocation, setDiscrepancyLocation] = useState("");
+  const [discrepancyTraceCode, setDiscrepancyTraceCode] = useState("");
+  const [discrepancyQty, setDiscrepancyQty] = useState("");
   
   // Group boxes by SKU
   const skus = Array.from(new Set(boxes.map(b => b.skuCode))).map(code => {
@@ -1282,20 +1292,22 @@ const Putaway = ({ boxes, onConfirm, onBack }: { boxes: InboundBox[], onConfirm:
           </div>
         </div>
 
-        <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', marginBottom: '16px' }}>
-          <div 
-            onClick={() => setActiveTab('in')}
-            style={{ flex: 1, textAlign: 'center', padding: '12px', color: activeTab === 'in' ? 'var(--accent)' : '#64748b', borderBottom: activeTab === 'in' ? '2px solid var(--accent)' : 'none', fontWeight: '600' }}
-          >
-            入库行明细
+        {!simplified && (
+          <div style={{ display: 'flex', borderBottom: '1px solid #e2e8f0', marginBottom: '16px' }}>
+            <div 
+              onClick={() => setActiveTab('in')}
+              style={{ flex: 1, textAlign: 'center', padding: '12px', color: activeTab === 'in' ? 'var(--accent)' : '#64748b', borderBottom: activeTab === 'in' ? '2px solid var(--accent)' : 'none', fontWeight: '600' }}
+            >
+              入库行明细
+            </div>
+            <div 
+              onClick={() => setActiveTab('out')}
+              style={{ flex: 1, textAlign: 'center', padding: '12px', color: activeTab === 'out' ? 'var(--accent)' : '#64748b', borderBottom: activeTab === 'out' ? '2px solid var(--accent)' : 'none', fontWeight: '600' }}
+            >
+              未入库行明细 <span style={{ background: 'red', color: 'white', padding: '0 6px', borderRadius: '10px', fontSize: '10px' }}>1</span>
+            </div>
           </div>
-          <div 
-            onClick={() => setActiveTab('out')}
-            style={{ flex: 1, textAlign: 'center', padding: '12px', color: activeTab === 'out' ? 'var(--accent)' : '#64748b', borderBottom: activeTab === 'out' ? '2px solid var(--accent)' : 'none', fontWeight: '600' }}
-          >
-            未入库行明细 <span style={{ background: 'red', color: 'white', padding: '0 6px', borderRadius: '10px', fontSize: '10px' }}>1</span>
-          </div>
-        </div>
+        )}
         
         {activeTab === 'in' ? (
           <div style={{ background: 'white', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
@@ -1339,14 +1351,18 @@ const Putaway = ({ boxes, onConfirm, onBack }: { boxes: InboundBox[], onConfirm:
                 <span>生产厂家:</span>
                 <span style={{ color: '#334155', textAlign: 'right', flex: 1, marginLeft: '20px' }}>{currentBox.manufacturer}</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span>到货数量:</span>
-                <span style={{ color: '#334155' }}>{currentBox.totalQty}</span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                <span>进库数量:</span>
-                <span style={{ color: '#334155' }}>0</span>
-              </div>
+              {!simplified && (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <span>到货数量:</span>
+                    <span style={{ color: '#334155' }}>{currentBox.totalQty}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                    <span>进库数量:</span>
+                    <span style={{ color: '#334155' }}>0</span>
+                  </div>
+                </>
+              )}
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                 <span>生产信息详情:</span>
                 <span 
@@ -1356,10 +1372,12 @@ const Putaway = ({ boxes, onConfirm, onBack }: { boxes: InboundBox[], onConfirm:
                   【查看详情】
                 </span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span>不可入库数:</span>
-                <span style={{ color: 'var(--accent)' }}>0</span>
-              </div>
+              {!simplified && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>不可入库数:</span>
+                  <span style={{ color: 'var(--accent)' }}>0</span>
+                </div>
+              )}
             </div>
 
             <div style={{ marginTop: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1382,26 +1400,48 @@ const Putaway = ({ boxes, onConfirm, onBack }: { boxes: InboundBox[], onConfirm:
                    onClick={() => setExpandedSku(expandedSku === sku.code ? null : sku.code)}
                    style={{ padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
                  >
-                   <div style={{ fontWeight: '600' }}>{sku.name} ({sku.code})</div>
+                   <div style={{ fontWeight: '600', color: 'var(--accent)' }}>{sku.name} {sku.code}</div>
                    <div style={{ color: '#94a3b8', transform: expandedSku === sku.code ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>▼</div>
                  </div>
                  {expandedSku === sku.code && (
                    <div style={{ padding: '0 16px 16px 16px', borderTop: '1px solid #f1f5f9' }}>
                      {boxes.filter(b => b.skuCode === sku.code).map((b, idx) => (
-                       <div key={idx} style={{ marginTop: '12px', padding: '12px', background: '#f8fafc', borderRadius: '6px', fontSize: '13px' }}>
-                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                           <span style={{ color: '#64748b' }}>批号:</span>
-                           <span style={{ fontWeight: '600' }}>{b.batchNo}</span>
+                       <div key={idx} style={{ marginTop: '12px' }}>
+                         <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '12px', border: '1px solid #f1f5f9', fontSize: '14px' }}>
+                           <div style={{ display: 'flex', marginBottom: '12px' }}>
+                             <span style={{ color: '#64748b', width: '80px' }}>批号:</span>
+                             <span style={{ color: '#334155' }}>{b.batchNo}</span>
+                           </div>
+                           <div style={{ display: 'flex', marginBottom: '12px' }}>
+                             <span style={{ color: '#64748b', width: '80px' }}>规格型号:</span>
+                             <span style={{ color: '#334155' }}>{b.spec}</span>
+                           </div>
+                           <div style={{ display: 'flex', marginBottom: '12px' }}>
+                             <span style={{ color: '#64748b', width: '80px' }}>生产厂家:</span>
+                             <span style={{ color: '#334155', flex: 1 }}>{b.manufacturer}</span>
+                           </div>
+                           <div style={{ display: 'flex', marginBottom: '12px' }}>
+                             <span style={{ color: '#64748b', width: '80px' }}>生产日期:</span>
+                             <span style={{ color: '#334155' }}>{b.productionDate}</span>
+                           </div>
+                           <div style={{ display: 'flex', marginBottom: '4px' }}>
+                             <span style={{ color: '#64748b', width: '80px' }}>商品类型:</span>
+                             <span style={{ color: '#334155' }}>大码</span>
+                           </div>
                          </div>
-                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                           <span style={{ color: '#64748b' }}>待入库:</span>
-                           <span style={{ color: 'var(--accent)', fontWeight: 'bold' }}>{b.pendingQty}</span>
-                         </div>
-                         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '8px' }}>
-                           <button style={{ padding: '4px 12px', borderRadius: '4px', border: '1px solid var(--accent)', color: 'var(--accent)', background: 'white', fontSize: '12px' }}>
-                             到货差异
-                           </button>
-                         </div>
+                         <button 
+                           onClick={() => {
+                             setSelectedDiscrepancyBox(b);
+                             setShowDiscrepancyForm(true);
+                           }}
+                           style={{ 
+                             width: '100%', marginTop: '12px', padding: '12px', 
+                             borderRadius: '8px', border: 'none', background: 'var(--accent)', 
+                             color: 'white', fontWeight: '600', fontSize: '15px' 
+                           }}
+                         >
+                           到货差异
+                         </button>
                        </div>
                      ))}
                    </div>
@@ -1466,6 +1506,109 @@ const Putaway = ({ boxes, onConfirm, onBack }: { boxes: InboundBox[], onConfirm:
               style={{ width: '100%', marginTop: '24px', padding: '14px', borderRadius: '8px', border: 'none', background: 'var(--accent)', color: 'white', fontWeight: '600' }}
             >
               关闭
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showDiscrepancyForm && selectedDiscrepancyBox && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'white', zIndex: 1200, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '16px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <button onClick={() => setShowDiscrepancyForm(false)} style={{ border: 'none', background: 'none', fontSize: '20px' }}>←</button>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: '600', fontSize: '15px' }}>{selectedDiscrepancyBox.skuName}</div>
+              <div style={{ fontSize: '12px', color: '#64748b' }}>{selectedDiscrepancyBox.batchNo}</div>
+            </div>
+            <div style={{ fontWeight: 'bold', fontSize: '16px' }}>{selectedDiscrepancyBox.pendingQty}</div>
+          </div>
+          
+          <div style={{ flex: 1, overflowY: 'auto', padding: '16px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
+              {['商品破损', '效期拒收', '少货'].map(reason => (
+                <button 
+                  key={reason}
+                  onClick={() => setDiscrepancyReason(reason)}
+                  style={{ 
+                    padding: '12px', borderRadius: '8px', textAlign: 'left',
+                    background: discrepancyReason === reason ? 'var(--accent)' : 'white',
+                    color: discrepancyReason === reason ? 'white' : '#334155',
+                    border: '1px solid #e2e8f0',
+                    fontWeight: '500',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  {reason}
+                </button>
+              ))}
+            </div>
+            
+            <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '16px', marginBottom: '16px' }}>
+              <div style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px' }}>货位选择 <span style={{ color: 'red' }}>*</span></div>
+              <div style={{ position: 'relative', marginBottom: '12px' }}>
+                <input 
+                  placeholder="请扫描或输入库位"
+                  value={discrepancyLocation}
+                  onChange={(e) => setDiscrepancyLocation(e.target.value)}
+                  style={{ width: '100%', padding: '12px', borderRadius: '4px', border: '1px solid #cbd5e1', outline: 'none' }}
+                />
+                <div style={{ position: 'absolute', right: '12px', top: '12px', color: '#94a3b8' }}>
+                  <IconScan size={18} />
+                </div>
+              </div>
+              <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '4px', border: '1px solid #f1f5f9' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <span style={{ color: '#64748b', fontSize: '13px' }}>货位号:</span>
+                  <span style={{ color: '#334155', fontSize: '13px' }}>{discrepancyLocation || '-'}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#64748b', fontSize: '13px' }}>库位状态:</span>
+                  <span style={{ color: '#334155', fontSize: '13px' }}>{discrepancyLocation ? '正常' : '-'}</span>
+                </div>
+              </div>
+            </div>
+            
+            <div style={{ background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', padding: '16px', marginBottom: '16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <span style={{ fontSize: '14px', fontWeight: '600' }}>溯源码</span>
+                <span style={{ fontSize: '12px', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>大码</span>
+              </div>
+              <div style={{ position: 'relative' }}>
+                <input 
+                  placeholder="扫描溯源码"
+                  value={discrepancyTraceCode}
+                  onChange={(e) => setDiscrepancyTraceCode(e.target.value)}
+                  style={{ width: '100%', padding: '12px', borderRadius: '4px', border: '1px solid #cbd5e1', outline: 'none' }}
+                />
+                <div style={{ position: 'absolute', right: '12px', top: '12px', color: '#94a3b8' }}>
+                  <IconScan size={18} />
+                </div>
+              </div>
+            </div>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '14px', fontWeight: '600' }}>移入商品数: <span style={{ color: 'red' }}>*</span></span>
+                <input 
+                  value={discrepancyQty}
+                  onChange={(e) => setDiscrepancyQty(e.target.value)}
+                  style={{ width: '60px', padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e1', textAlign: 'center' }}
+                />
+              </div>
+              <div style={{ fontSize: '14px', color: '#64748b' }}>
+                剩余入库 <span style={{ color: 'var(--accent)', fontWeight: 'bold' }}>{selectedDiscrepancyBox.pendingQty}</span>
+              </div>
+            </div>
+          </div>
+          
+          <div style={{ padding: '16px', background: 'white', borderTop: '1px solid #f1f5f9' }}>
+            <button 
+              onClick={() => {
+                setShowDiscrepancyForm(false);
+                onConfirm();
+              }}
+              style={{ width: '100%', padding: '14px', borderRadius: '8px', border: 'none', background: 'var(--accent)', color: 'white', fontWeight: '600', fontSize: '16px' }}
+            >
+              提交
             </button>
           </div>
         </div>
@@ -1771,7 +1914,7 @@ const InventoryQuery = ({ onBack }: { onBack: () => void }) => {
                   <span style={{ color: '#1e293b', flex: 1 }}>{item.manufacturer}</span>
                 </div>
                 <div style={{ display: 'flex', marginBottom: '12px', fontSize: '14px' }}>
-                  <span style={{ color: '#64748b', width: '60px' }}>近:</span>
+                  <span style={{ color: '#64748b', width: '60px' }}>有效期:</span>
                   <span style={{ color: '#1e293b' }}>{item.expiryDate}</span>
                 </div>
 
@@ -1832,6 +1975,350 @@ const InventoryQuery = ({ onBack }: { onBack: () => void }) => {
           </button>
         </div>
       )}
+    </div>
+  );
+};
+
+// --- Trace Review Components ---
+
+interface TraceItem {
+  skuCode: string;
+  skuName: string;
+  batchNo: string;
+  spec: string;
+  manufacturer: string;
+  productionDate: string;
+  expiryDate: string;
+  planQty: number;
+  scannedCodes: string[];
+}
+
+interface TraceOrder {
+  orderNo: string;
+  createdTime: string;
+  items: TraceItem[];
+}
+
+const MOCK_TRACE_ORDERS: TraceOrder[] = [
+  {
+    orderNo: '1604076264667218224',
+    createdTime: '2026-03-24 14:10:02',
+    items: [
+      {
+        skuCode: '1150103161',
+        skuName: '精氨酸布洛芬片',
+        batchNo: '1012665',
+        spec: '0.4g*8片',
+        manufacturer: '海南赞邦制药有限公司',
+        productionDate: '2025-10-01 00:00:00',
+        expiryDate: '2028-09-30 00:00:00',
+        planQty: 1,
+        scannedCodes: []
+      }
+    ]
+  },
+  {
+    orderNo: '1604076268441306008',
+    createdTime: '2026-03-24 14:10:04',
+    items: [
+      {
+        skuCode: '1210203366',
+        skuName: '氯沙坦钾片',
+        batchNo: '0000135525',
+        spec: '50mg*7片*4板',
+        manufacturer: '浙江华海药业股份有限公司/浙江华海制药科技有限公司',
+        productionDate: '2025-05-21 00:00:00',
+        expiryDate: '2028-04-30 00:00:00',
+        planQty: 5,
+        scannedCodes: []
+      }
+    ]
+  },
+  {
+    orderNo: '1604076268962185281',
+    createdTime: '2026-03-24 14:10:03',
+    items: []
+  },
+  {
+    orderNo: '1604076268962185283',
+    createdTime: '2026-03-24 14:10:03',
+    items: []
+  }
+];
+
+const TraceReview = ({ onSelectOrder, onBack }: { onSelectOrder: (order: TraceOrder) => void, onBack: () => void }) => {
+  const [searchTerm, setSearchTerm] = useState("");
+
+  const handleScanOrder = () => {
+    // Simulate scanning the first order
+    onSelectOrder(MOCK_TRACE_ORDERS[0]);
+  };
+
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#f8fafc' }}>
+      {/* Header */}
+      <div style={{ background: 'white', padding: '16px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <button onClick={onBack} style={{ border: 'none', background: 'none', display: 'flex', alignItems: 'center', fontSize: '16px', color: '#334155' }}>
+          <IconChevronLeft /> 返回
+        </button>
+        <div style={{ flex: 1, textAlign: 'center', fontWeight: 'bold', fontSize: '18px' }}>追溯码二次复核</div>
+        <div style={{ width: '40px' }}></div>
+      </div>
+
+      <div style={{ padding: '16px', flex: 1, overflowY: 'auto' }}>
+        {/* Search Bar */}
+        <div style={{ background: 'white', borderRadius: '8px', padding: '8px 12px', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', marginBottom: '16px' }}>
+          <input 
+            placeholder="请扫描或输入配货单号" 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleScanOrder()}
+            style={{ flex: 1, border: 'none', outline: 'none', fontSize: '15px' }}
+          />
+          <div 
+            onClick={handleScanOrder}
+            style={{ color: '#ef4444', border: '1px solid #ef4444', borderRadius: '4px', padding: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <IconScan size={20} />
+          </div>
+        </div>
+
+        {/* Selected Order Info Placeholder */}
+        <div style={{ background: '#f1f5f9', borderRadius: '8px', padding: '12px', marginBottom: '16px', border: '1px solid #e2e8f0' }}>
+          <div style={{ display: 'flex', marginBottom: '8px' }}>
+            <span style={{ color: '#64748b', width: '80px' }}>配货单号:</span>
+            <span style={{ color: '#1e293b' }}></span>
+          </div>
+          <div style={{ display: 'flex' }}>
+            <span style={{ color: '#64748b', width: '80px' }}>创建日期:</span>
+            <span style={{ color: '#1e293b' }}></span>
+          </div>
+        </div>
+
+        {/* Order List */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {MOCK_TRACE_ORDERS.map(order => (
+            <div 
+              key={order.orderNo}
+              onClick={() => onSelectOrder(order)}
+              style={{ background: 'white', borderRadius: '12px', padding: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', cursor: 'pointer', position: 'relative' }}
+            >
+              <div style={{ display: 'flex', marginBottom: '12px' }}>
+                <span style={{ color: '#64748b', width: '80px' }}>配货单号:</span>
+                <span style={{ color: '#3b82f6', fontWeight: 'bold', flex: 1 }}>{order.orderNo}</span>
+                <span style={{ fontSize: '18px' }}>📋</span>
+              </div>
+              <div style={{ display: 'flex' }}>
+                <span style={{ color: '#64748b', width: '80px' }}>创建日期:</span>
+                <span style={{ color: '#1e293b', fontWeight: 'bold' }}>{order.createdTime}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const TraceReviewDetail = ({ order, onBack, onComplete }: { order: TraceOrder, onBack: () => void, onComplete: () => void }) => {
+  const [items, setItems] = useState<TraceItem[]>(order.items.map(item => ({ ...item })));
+  const [isBlindScan, setIsBlindScan] = useState(false);
+  const [scanInput, setScanInput] = useState("");
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(0);
+  const [lastScannedCode, setLastScannedCode] = useState<string | null>(null);
+
+  const handleScan = (code: string) => {
+    if (!code) return;
+    
+    let updatedItems = [...items];
+    let found = false;
+
+    if (isBlindScan) {
+      // Blind scan: find first item that needs scanning
+      for (let i = 0; i < updatedItems.length; i++) {
+        if (updatedItems[i].scannedCodes.length < updatedItems[i].planQty) {
+          updatedItems[i].scannedCodes.push(code);
+          found = true;
+          setExpandedIndex(i);
+          break;
+        }
+      }
+    } else {
+      // Manual scan: scan into expanded item
+      if (expandedIndex !== null) {
+        if (updatedItems[expandedIndex].scannedCodes.length < updatedItems[expandedIndex].planQty) {
+          updatedItems[expandedIndex].scannedCodes.push(code);
+          found = true;
+        }
+      }
+    }
+
+    if (found) {
+      setItems(updatedItems);
+      setScanInput("");
+      setLastScannedCode(code);
+    } else {
+      alert("无法匹配商品或已扫描完成");
+    }
+  };
+
+  const removeCode = (itemIndex: number, codeIndex: number) => {
+    const updatedItems = [...items];
+    updatedItems[itemIndex].scannedCodes.splice(codeIndex, 1);
+    setItems(updatedItems);
+  };
+
+  const totalRemaining = items.reduce((acc, item) => acc + (item.planQty - item.scannedCodes.length), 0);
+  const isAllCompleted = totalRemaining === 0;
+
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#f8fafc' }}>
+      {/* Header */}
+      <div style={{ background: 'white', padding: '16px', borderBottom: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <button onClick={onBack} style={{ border: 'none', background: 'none', display: 'flex', alignItems: 'center', fontSize: '16px', color: '#334155' }}>
+          <IconChevronLeft /> 返回
+        </button>
+        <div style={{ flex: 1, textAlign: 'center', fontWeight: 'bold', fontSize: '18px' }}>追溯码二次复核</div>
+        <div style={{ width: '40px' }}></div>
+      </div>
+
+      <div style={{ padding: '16px', flex: 1, overflowY: 'auto' }}>
+        {/* Order Info */}
+        <div style={{ background: 'white', borderRadius: '8px', padding: '12px', marginBottom: '16px', border: '1px solid #e2e8f0' }}>
+          <div style={{ marginBottom: '12px' }}>
+            <input 
+              readOnly 
+              value={order.orderNo}
+              style={{ width: '100%', padding: '8px 12px', borderRadius: '4px', border: '1px solid #e2e8f0', background: '#f8fafc', outline: 'none' }}
+            />
+          </div>
+          <div style={{ display: 'flex', marginBottom: '8px' }}>
+            <span style={{ color: '#64748b', width: '80px' }}>配货单号:</span>
+            <span style={{ color: '#1e293b', fontWeight: 'bold' }}>{order.orderNo}</span>
+          </div>
+          <div style={{ display: 'flex' }}>
+            <span style={{ color: '#64748b', width: '80px' }}>创建日期:</span>
+            <span style={{ color: '#1e293b', fontWeight: 'bold' }}>{order.createdTime}</span>
+          </div>
+        </div>
+
+        {/* Item List */}
+        {items.map((item, idx) => {
+          const isCompleted = item.scannedCodes.length >= item.planQty;
+          const isPartiallyScanned = item.scannedCodes.length > 0 && !isCompleted;
+          
+          let bgColor = 'white';
+          if (isCompleted) bgColor = '#f0fdf4'; // Light green
+          else if (isPartiallyScanned) bgColor = '#fff1f2'; // Light pink
+
+          return (
+            <div 
+              key={idx} 
+              style={{ background: bgColor, borderRadius: '12px', padding: '16px', marginBottom: '16px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', border: '1px solid #e2e8f0' }}
+            >
+              <div 
+                onClick={() => setExpandedIndex(expandedIndex === idx ? null : idx)}
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', cursor: 'pointer' }}
+              >
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 'bold', fontSize: '16px', marginBottom: '4px' }}>{item.skuName}</div>
+                  <div style={{ color: '#64748b', fontSize: '13px' }}>{item.skuCode}</div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                  <div style={{ fontWeight: 'bold', fontSize: '16px' }}>x{item.planQty}</div>
+                  <div style={{ color: '#94a3b8', transform: expandedIndex === idx ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }}>▼</div>
+                </div>
+              </div>
+
+              {/* Progress Bar */}
+              <div style={{ height: '8px', background: '#e2e8f0', borderRadius: '4px', marginTop: '12px', overflow: 'hidden' }}>
+                <div style={{ width: `${(item.scannedCodes.length / item.planQty) * 100}%`, height: '100%', background: '#22c55e', transition: 'width 0.3s' }}></div>
+              </div>
+              <div style={{ textAlign: 'right', fontSize: '12px', color: '#64748b', marginTop: '4px' }}>{item.scannedCodes.length}/{item.planQty}</div>
+
+              {expandedIndex === idx && (
+                <div style={{ marginTop: '16px', borderTop: '1px solid #f1f5f9', paddingTop: '16px' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', gap: '8px', fontSize: '14px', color: '#64748b' }}>
+                    <span>批号:</span><span style={{ color: '#334155' }}>{item.batchNo}</span>
+                    <span>规格型号:</span><span style={{ color: '#334155' }}>{item.spec}</span>
+                    <span>生产厂家:</span><span style={{ color: '#334155' }}>{item.manufacturer}</span>
+                    <span>生产日期:</span><span style={{ color: '#334155' }}>{item.productionDate}</span>
+                    <span>有效期:</span><span style={{ color: '#334155' }}>{item.expiryDate}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {/* Scan Input Section */}
+        <div style={{ background: 'white', borderRadius: '12px', padding: '16px', border: '1px solid #e2e8f0', marginBottom: '16px' }}>
+          <div style={{ fontSize: '14px', fontWeight: 'bold', marginBottom: '12px' }}>溯源码扫描 <span style={{ color: '#ef4444' }}>*</span></div>
+          <div style={{ position: 'relative', marginBottom: '12px' }}>
+            <input 
+              placeholder="扫描溯源码" 
+              value={scanInput}
+              onChange={(e) => setScanInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleScan(scanInput)}
+              style={{ width: '100%', padding: '12px', borderRadius: '4px', border: '1px solid #cbd5e1', outline: 'none' }}
+            />
+          </div>
+
+          {/* Scanned Codes List (Image 3 style) */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            {items.flatMap((item, iIdx) => item.scannedCodes.map((code, cIdx) => (
+              <div key={`${iIdx}-${cIdx}`} style={{ background: '#f1f5f9', padding: '6px 10px', borderRadius: '4px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px', border: '1px solid #e2e8f0' }}>
+                {code}
+                <button 
+                  onClick={(e) => { e.stopPropagation(); removeCode(iIdx, cIdx); }}
+                  style={{ border: 'none', background: '#334155', color: 'white', borderRadius: '2px', width: '16px', height: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '10px', cursor: 'pointer' }}
+                >
+                  ✕
+                </button>
+              </div>
+            )))}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <div style={{ fontSize: '14px', color: '#64748b' }}>追溯码剩余扫码数:</div>
+          <div style={{ fontSize: '18px', fontWeight: 'bold', color: '#3b82f6' }}>{totalRemaining}</div>
+        </div>
+
+        {/* Blind Scan Mode Toggle */}
+        <div 
+          onClick={() => setIsBlindScan(!isBlindScan)}
+          style={{ 
+            background: 'white', borderRadius: '8px', padding: '16px', border: isBlindScan ? '1px solid #ef4444' : '1px solid #e2e8f0', 
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' 
+          }}
+        >
+          <div>
+            <div style={{ fontWeight: 'bold', fontSize: '16px', marginBottom: '4px' }}>盲扫模式</div>
+            <div style={{ fontSize: '12px', color: '#64748b' }}>扫描追溯码自动填充至对应批号商品中</div>
+          </div>
+          <div style={{ color: isBlindScan ? '#ef4444' : '#94a3b8' }}>
+            <IconGrid size={24} />
+          </div>
+        </div>
+      </div>
+
+      {/* Footer Actions */}
+      <div style={{ padding: '16px', background: 'white', borderTop: '1px solid #e2e8f0', display: 'flex', gap: '12px' }}>
+        <button 
+          onClick={onBack}
+          style={{ flex: 1, padding: '14px', borderRadius: '8px', border: 'none', background: '#f1f5f9', color: '#64748b', fontWeight: '600' }}
+        >
+          取消
+        </button>
+        <button 
+          disabled={!isAllCompleted}
+          onClick={onComplete}
+          style={{ flex: 1, padding: '14px', borderRadius: '8px', border: 'none', background: isAllCompleted ? '#3b82f6' : '#cbd5e1', color: 'white', fontWeight: '600' }}
+        >
+          发货
+        </button>
+      </div>
     </div>
   );
 };
@@ -1898,6 +2385,7 @@ const App = () => {
   
   const [selectedInboundOrder, setSelectedInboundOrder] = useState<InboundOrder | null>(null);
   const [selectedInboundBox, setSelectedInboundBox] = useState<InboundBox | null>(null);
+  const [selectedTraceOrder, setSelectedTraceOrder] = useState<TraceOrder | null>(null);
 
   const handleTaskSelect = (task: PickingTask) => {
     setSelectedTask(task);
@@ -1922,7 +2410,15 @@ const App = () => {
 
   return (
     <div style={{ width: '100%', height: '100vh', overflow: 'hidden', overflowX: 'hidden' }}>
-      {currentView === 'dashboard' && <Dashboard tasks={tasks} onNavigate={setCurrentView} />}
+      {currentView === 'dashboard' && (
+        <Dashboard 
+          tasks={tasks} 
+          onNavigate={(view) => {
+            if (view === 'putaway') setSelectedInboundBox(null);
+            setCurrentView(view as ViewType);
+          }} 
+        />
+      )}
       {currentView === 'taskList' && <TaskList tasks={tasks} onSelectTask={handleTaskSelect} onBack={() => setCurrentView('dashboard')} />}
       {currentView === 'taskDetail' && selectedTask && (
         <TaskDetail 
@@ -1948,11 +2444,18 @@ const App = () => {
         />
       )}
       
-      {currentView === 'putaway' && selectedInboundBox && (
+      {currentView === 'putaway' && (
         <Putaway 
           boxes={MOCK_INBOUND_BOXES} 
           onConfirm={() => setCurrentView('dashboard')} 
-          onBack={() => setCurrentView('boxDetail')} 
+          onBack={() => {
+            if (selectedInboundBox) {
+              setCurrentView('boxDetail');
+            } else {
+              setCurrentView('dashboard');
+            }
+          }}
+          simplified={!selectedInboundBox}
         />
       )}
       
@@ -1966,6 +2469,21 @@ const App = () => {
 
       {currentView === 'settings' && (
         <Settings onBack={() => setCurrentView('dashboard')} />
+      )}
+
+      {currentView === 'traceReview' && (
+        <TraceReview 
+          onSelectOrder={(order) => { setSelectedTraceOrder(order); setCurrentView('traceReviewDetail'); }} 
+          onBack={() => setCurrentView('dashboard')} 
+        />
+      )}
+
+      {currentView === 'traceReviewDetail' && selectedTraceOrder && (
+        <TraceReviewDetail 
+          order={selectedTraceOrder} 
+          onBack={() => setCurrentView('traceReview')} 
+          onComplete={() => setCurrentView('traceReview')} 
+        />
       )}
     </div>
   );
